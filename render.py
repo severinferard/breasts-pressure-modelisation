@@ -7,8 +7,8 @@ import pyvistaqt as pvqt
 
 np.set_printoptions(linewidth=500)
 
-N_COLUMNS=21
-N_ROWS=12
+N_COLUMNS = 21
+N_ROWS = 12
 
 # table = np.reshape(array, (N_COLUMNS, N_ROWS)).astype(int)
 
@@ -22,7 +22,6 @@ grid = pv.StructuredGrid(xx, yy, z)
 # grid.plot()
 
 
-
 plotter = pvqt.BackgroundPlotter()
 plotter.add_mesh(grid, cmap='bwr', show_scalar_bar=False)
 # plane = pv.Plane(i_size=N_COLUMNS, j_size=N_ROWS)
@@ -32,17 +31,17 @@ plotter.add_mesh(grid, cmap='bwr', show_scalar_bar=False)
 plotter.view_isometric()
 
 
-
 # while True:
 #     plotter.render()
 #     plotter.app.processEvents()
 
-while True:                             
-    val = ser.readline()               
+
+while True:
+    val = ser.readline()
 
     while not b'\n' in val:
         val += ser.readline()
-    
+
     table = get_2d_array_from_raw_data(val)
     if (table is None):
         print("bad data")
@@ -59,7 +58,7 @@ while True:
 
     g = pv.StructuredGrid(xx, yy, table)
     grid.shallow_copy(g)
-    
+
     plotter.render()
     plotter.app.processEvents()
 
