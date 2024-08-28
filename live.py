@@ -13,7 +13,7 @@ N_COLUMNS = 21
 N_ROWS = 12
 K = 5
 
-# ser = serial.Serial('/dev/tty.usbmodem21301', 115200, timeout=1)
+# ser = serial.Serial('/dev/tty.usbmodem21101', 115200, timeout=1)
 
 
 noise_frame = 0
@@ -102,23 +102,28 @@ boob_mesh['pressure'] = np.zeros(boob_mesh.points.shape[0])
 boob_mesh['max_pressure'] = boob_mesh['pressure']
 
 
+MAX_VALUE = 30
+MIN_VALUE = 0
+
+
 pl = pvqt.BackgroundPlotter(shape=(2, 2), border=False)
 pl.subplot(0, 0)
 pl.add_text("Measured Pressure Values on Grid", font_size=12)
-pl.add_mesh(point_cloud, scalars='pressure', cmap='cool', point_size=15, clim=[0, 50])
+pl.add_mesh(point_cloud, scalars='pressure', cmap='cool', point_size=15, clim=[MIN_VALUE, MAX_VALUE])
 
 pl.subplot(0, 1)
 pl.add_text(f"Inverse Distance Weighted Interpolation (k={K})", font_size=12)
-pl.add_mesh(boob_mesh, scalars='pressure', cmap='cool', clim=[0, 50])
+pl.add_mesh(boob_mesh, scalars='pressure', cmap='cool', clim=[MIN_VALUE, MAX_VALUE])
 
 pl.subplot(1, 0)
 pl.add_text(f"Max Measured Pressure Values On Grid", font_size=12)
-pl.add_mesh(point_cloud, scalars='max_pressure', cmap='cool', point_size=15, copy_mesh=True, clim=[0, 50])
+pl.add_mesh(point_cloud, scalars='max_pressure', cmap='cool',
+            point_size=15, copy_mesh=True, clim=[MIN_VALUE, MAX_VALUE])
 
 pl.subplot(1, 1)
 pl.add_text(f"Max Inverse Distance Weighted Interpolation (k={K})", font_size=12)
 pl.add_mesh(boob_mesh, scalars='max_pressure', cmap='cool',
-            copy_mesh=True, clim=[0, 50])
+            copy_mesh=True, clim=[MIN_VALUE, MAX_VALUE])
 
 pl.link_views()
 
@@ -145,8 +150,8 @@ while True:
     point_cloud['max_pressure'][:] = np.maximum(point_cloud['max_pressure'], data)
 
     boob_mesh['pressure'][:] = np.sum(data[boob_mesh['nearest_points']] * normalized_weights, axis=1)
-    boob_mesh['max_pressure'][:] = np.sum(
-        point_cloud['max_pressure'][boob_mesh['nearest_points']] * normalized_weights, axis=1)
+    # boob_mesh['max_pressure'][:] = np.sum(
+    #     point_cloud['max_pressure'][boob_mesh['nearest_points']] * normalized_weights, axis=1)
 
     pl.render()
     pl.app.processEvents()
