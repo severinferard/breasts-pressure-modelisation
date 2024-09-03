@@ -13,7 +13,7 @@ N_COLUMNS = 21
 N_ROWS = 12
 K = 5
 
-# ser = serial.Serial('/dev/tty.usbmodem21101', 115200, timeout=1)
+ser = serial.Serial('/dev/tty.usbmodem1101', 115200, timeout=1)
 
 
 noise_frame = 0
@@ -135,8 +135,8 @@ calibration_data = None
 
 while True:
 
-    # data = read_sample()
-    data = read_noise()
+    data = read_sample()
+    # data = read_noise()
     if (data is None):
         continue
 
