@@ -7,7 +7,7 @@ from vtkmodules.util import numpy_support
 
 
 class VTKPointCloudRenderer:
-    def __init__(self, serial_port,  n_columns=21, n_rows=12, point_size=30, K=5):
+    def __init__(self, serial_port,  n_columns=21, n_rows=12, point_size=15, K=5):
         self.N_COLUMNS = n_columns
         self.N_ROWS = n_rows
         self.noise_frame = 0
@@ -26,15 +26,26 @@ class VTKPointCloudRenderer:
         self.meshColors.SetNumberOfComponents(3)  # RGB colors
         self.meshColors.SetName("Mesh Colors")
 
+        # Load point cloud from CSV file
+
+        self.meshPoints = vtk.vtkPoints()
+        meshPointsArray = np.loadtxt("./assets/boob.pcd", delimiter=" ")
+        for p in meshPointsArray:
+            self.meshPoints.InsertNextPoint(p)
+
         # Load your mesh points
         boobMeshCloudPoints = np.load("./assets/boob_grid_12_21.npy")
         for p in boobMeshCloudPoints:
             self.points.InsertNextPoint(p)
 
-        reader = vtk.vtkOBJReader()
-        reader.SetFileName('./assets/boob.obj')
-        reader.Update()
-        self.meshPolyData = reader.GetOutput()
+        # reader = vtk.vtkOBJReader()
+        # reader.SetFileName('./assets/simplify_boob.obj')
+        # reader.Update()
+
+        self.meshPolyData = vtk.vtkPolyData()
+        self.meshPolyData.SetPoints(self.meshPoints)
+        self.meshPolyData.GetPointData().SetScalars(self.meshColors)
+
         self.meshPolyDataPoints = numpy_support.vtk_to_numpy(self.meshPolyData.GetPoints().GetData())
 
         # Translate the mesh
@@ -47,13 +58,20 @@ class VTKPointCloudRenderer:
         self.meshPolyData = transformFilter.GetOutput()
         self.meshPolyData.GetPointData().SetScalars(self.meshColors)
 
+        # Create a vertex glyph filter to render points
+        self.meshVertexFilter = vtk.vtkVertexGlyphFilter()
+        self.meshVertexFilter.SetInputData(self.meshPolyData)
+        self.meshVertexFilter.Update()
+
         # Create a mapper for the mesh
         self.meshMapper = vtk.vtkPolyDataMapper()
-        self.meshMapper.SetInputData(self.meshPolyData)
+        self.meshMapper.SetInputConnection(self.meshVertexFilter.GetOutputPort())
+        # self.meshMapper.SetInputData(self.meshPolyData)
 
         # Create an actor for the mesh
         self.meshActor = vtk.vtkActor()
         self.meshActor.SetMapper(self.meshMapper)
+        self.meshActor.GetProperty().SetPointSize(point_size)
 
         origin = np.array([0, 0, 0])
         self.points_to_skip = np.where((boobMeshCloudPoints == origin).all(axis=1))[0]
@@ -180,7 +198,7 @@ class VTKPointCloudRenderer:
         self.calibrationData = self.currentData
 
     def update_points_colors(self, caller, event):
-
+        # return
         values = self.read_sample()
         if values is None:
             return
@@ -188,18 +206,6 @@ class VTKPointCloudRenderer:
         values = np.delete(values, self.points_to_skip)
         values = np.clip(values, 0, None)
 
-        # self.colors.Reset()  # Clear previous colors
-        # for noise_value in values:
-        #     # Normalize noise value to the range [0, 1]
-        #     normalized_value = max(0, min(noise_value, 50)) / 50
-
-        #     # Map normalized value to color (from blue to red)
-        #     r = int(255 * normalized_value)
-        #     g = 0
-        #     b = int(255 * (1 - normalized_value))
-        #     self.colors.InsertNextTuple3(r, g, b)
-
-        print(self.renderer.GetActiveCamera().GetPosition())
         MAX_VALUE = 30
 
         self.meshColors.Reset()
@@ -214,10 +220,6 @@ class VTKPointCloudRenderer:
         self.meshPolyData.GetPointData().SetScalars(vtkData)
         self.meshPolyData.Modified()  # Mark the polydata as modified to update the rendering
 
-        # Update the colors in the polydata
-        # self.pointPolydata.GetPointData().SetScalars(self.colors)
-        # self.pointPolydata.Modified()  # Mark the polydata as modified to update the rendering
-
         self.renderWindow.Render()  # Re-render the window
 
     def start(self):
@@ -228,7 +230,7 @@ class VTKPointCloudRenderer:
 if __name__ == "__main__":
     ports = serial.tools.list_ports.comports()
     for port in ports:
-        if port.name.startswith("cu.usbmodem"):
+        if port.name.startswith("ttyACM"):
             selected_port = port
             break
     else:
