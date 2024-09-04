@@ -28,78 +28,79 @@ class VTKPointCloudRenderer:
 
         # Load point cloud from CSV file
 
-        self.meshPoints = vtk.vtkPoints()
-        meshPointsArray = np.loadtxt("./assets/boob.pcd", delimiter=" ")
-        for p in meshPointsArray:
-            self.meshPoints.InsertNextPoint(p)
-
-        # Load your mesh points
-        boobMeshCloudPoints = np.load("./assets/boob_grid_12_21.npy")
-        for p in boobMeshCloudPoints:
-            self.points.InsertNextPoint(p)
+        # self.meshPoints = vtk.vtkPoints()
+        # meshPointsArray = np.loadtxt("./assets/boob.pcd", delimiter=" ")
+        # for p in meshPointsArray:
+        #     self.meshPoints.InsertNextPoint(p)
 
         # reader = vtk.vtkOBJReader()
         # reader.SetFileName('./assets/simplify_boob.obj')
         # reader.Update()
 
-        self.meshPolyData = vtk.vtkPolyData()
-        self.meshPolyData.SetPoints(self.meshPoints)
-        self.meshPolyData.GetPointData().SetScalars(self.meshColors)
+        # self.meshPolyData = vtk.vtkPolyData()
+        # self.meshPolyData.SetPoints(self.meshPoints)
+        # self.meshPolyData.GetPointData().SetScalars(self.meshColors)
 
-        self.meshPolyDataPoints = numpy_support.vtk_to_numpy(self.meshPolyData.GetPoints().GetData())
+        # self.meshPolyDataPoints = numpy_support.vtk_to_numpy(self.meshPolyData.GetPoints().GetData())
 
         # Translate the mesh
-        transform = vtk.vtkTransform()
-        transform.Translate(0, -0.035, 0)  # Adjust the translation values as needed
-        transformFilter = vtk.vtkTransformFilter()
-        transformFilter.SetInputData(self.meshPolyData)
-        transformFilter.SetTransform(transform)
-        transformFilter.Update()
-        self.meshPolyData = transformFilter.GetOutput()
-        self.meshPolyData.GetPointData().SetScalars(self.meshColors)
+        # transform = vtk.vtkTransform()
+        # transform.Translate(0, -0.035, 0)  # Adjust the translation values as needed
+        # transformFilter = vtk.vtkTransformFilter()
+        # transformFilter.SetInputData(self.meshPolyData)
+        # transformFilter.SetTransform(transform)
+        # transformFilter.Update()
+        # self.meshPolyData = transformFilter.GetOutput()
+        # self.meshPolyData.GetPointData().SetScalars(self.meshColors)
 
         # Create a vertex glyph filter to render points
-        self.meshVertexFilter = vtk.vtkVertexGlyphFilter()
-        self.meshVertexFilter.SetInputData(self.meshPolyData)
-        self.meshVertexFilter.Update()
+        # self.meshVertexFilter = vtk.vtkVertexGlyphFilter()
+        # self.meshVertexFilter.SetInputData(self.meshPolyData)
+        # self.meshVertexFilter.Update()
 
-        # Create a mapper for the mesh
-        self.meshMapper = vtk.vtkPolyDataMapper()
-        self.meshMapper.SetInputConnection(self.meshVertexFilter.GetOutputPort())
-        # self.meshMapper.SetInputData(self.meshPolyData)
+        # # Create a mapper for the mesh
+        # self.meshMapper = vtk.vtkPolyDataMapper()
+        # self.meshMapper.SetInputConnection(self.meshVertexFilter.GetOutputPort())
+        # # self.meshMapper.SetInputData(self.meshPolyData)
 
-        # Create an actor for the mesh
-        self.meshActor = vtk.vtkActor()
-        self.meshActor.SetMapper(self.meshMapper)
-        self.meshActor.GetProperty().SetPointSize(point_size)
+        # # Create an actor for the mesh
+        # self.meshActor = vtk.vtkActor()
+        # self.meshActor.SetMapper(self.meshMapper)
+        # self.meshActor.GetProperty().SetPointSize(point_size)
+
+        # Load your mesh points
+        boobMeshCloudPoints = np.load("./assets/boob_grid_12_21.npy")
 
         origin = np.array([0, 0, 0])
         self.points_to_skip = np.where((boobMeshCloudPoints == origin).all(axis=1))[0]
         self.points_of_interest = np.delete(boobMeshCloudPoints, self.points_to_skip, axis=0)
 
-        # Create the point cloud and initialize the scalars
-        cloudPressure = np.zeros(self.points_of_interest.shape[0])
-        cloudMaxPressure = np.zeros(self.points_of_interest.shape[0])
+        for p in self.points_of_interest:
+            self.points.InsertNextPoint(p)
 
-        # Create a kd-tree for quick nearest-neighbor lookup.
-        kdtree = KDTree(self.points_of_interest)
+        # # Create the point cloud and initialize the scalars
+        # cloudPressure = np.zeros(self.points_of_interest.shape[0])
+        # cloudMaxPressure = np.zeros(self.points_of_interest.shape[0])
 
-        # Find the K nearest point_cloud points for each points in the boob mesh and calculate their respective distances
-        self.meshNearestPOIs = kdtree.query(self.meshPolyDataPoints, k=self.K)[1]
-        self.meshNearestPOIsDists = kdtree.query(self.meshPolyDataPoints, k=self.K)[0]
+        # # Create a kd-tree for quick nearest-neighbor lookup.
+        # kdtree = KDTree(self.points_of_interest)
 
-        # # Step 1: Calculate the reciprocal of the distances
-        reciprocal_distances = 1 / self.meshNearestPOIsDists
+        # # Find the K nearest point_cloud points for each points in the boob mesh and calculate their respective distances
+        # self.meshNearestPOIs = kdtree.query(self.meshPolyDataPoints, k=self.K)[1]
+        # self.meshNearestPOIsDists = kdtree.query(self.meshPolyDataPoints, k=self.K)[0]
 
-        # # Step 2: Square the reciprocal distances
-        squared_reciprocal_distances = reciprocal_distances ** 1.2
+        # # # Step 1: Calculate the reciprocal of the distances
+        # reciprocal_distances = 1 / self.meshNearestPOIsDists
 
-        # # Step 3: Normalize the weights
-        self.normalizedWeight = squared_reciprocal_distances / \
-            np.sum(squared_reciprocal_distances, axis=1, keepdims=True)
+        # # # Step 2: Square the reciprocal distances
+        # squared_reciprocal_distances = reciprocal_distances ** 1.2
 
-        meshPressure = np.zeros(self.meshPolyDataPoints.shape[0])
-        meshMaxPressure = meshPressure
+        # # # Step 3: Normalize the weights
+        # self.normalizedWeight = squared_reciprocal_distances / \
+        #     np.sum(squared_reciprocal_distances, axis=1, keepdims=True)
+
+        # meshPressure = np.zeros(self.meshPolyDataPoints.shape[0])
+        # meshMaxPressure = meshPressure
         # boob_mesh['pressure'] = np.zeros(boob_mesh.points.shape[0])
         # boob_mesh['max_pressure'] = boob_mesh['pressure']
 
@@ -124,8 +125,8 @@ class VTKPointCloudRenderer:
 
         # Create a renderer
         self.renderer = vtk.vtkRenderer()
-        # self.renderer.AddActor(self.actor)
-        self.renderer.AddActor(self.meshActor)
+        self.renderer.AddActor(self.actor)
+        # self.renderer.AddActor(self.meshActor)
 
         self.renderer.SetBackground(0.1, 0.1, 0.1)  # Set background color
 
@@ -198,7 +199,6 @@ class VTKPointCloudRenderer:
         self.calibrationData = self.currentData
 
     def update_points_colors(self, caller, event):
-        # return
         values = self.read_sample()
         if values is None:
             return
@@ -206,19 +206,35 @@ class VTKPointCloudRenderer:
         values = np.delete(values, self.points_to_skip)
         values = np.clip(values, 0, None)
 
-        MAX_VALUE = 30
+        self.colors.Reset()  # Clear previous colors
+        for noise_value in values:
+            # Normalize noise value to the range [0, 1]
+            normalized_value = max(0, min(noise_value, 50)) / 50
 
-        self.meshColors.Reset()
-        pressure = np.sum(values[self.meshNearestPOIs] * self.normalizedWeight, axis=1)
+            # Map normalized value to color (from blue to red)
+            r = int(255 * normalized_value)
+            g = 0
+            b = int(255 * (1 - normalized_value))
+            self.colors.InsertNextTuple3(r, g, b)
 
-        normalized_values = np.clip(pressure, 0, MAX_VALUE) / MAX_VALUE
-        colors = np.column_stack(
-            [normalized_values * 255, np.zeros_like(normalized_values), np.full_like(normalized_values, 255)])
+        # print(self.renderer.GetActiveCamera().GetPosition())
+        # MAX_VALUE = 30
 
-        vtkData = numpy_support.numpy_to_vtk(num_array=colors, deep=True, array_type=vtk.VTK_UNSIGNED_CHAR)
+        # self.meshColors.Reset()
+        # pressure = np.sum(values[self.meshNearestPOIs] * self.normalizedWeight, axis=1)
 
-        self.meshPolyData.GetPointData().SetScalars(vtkData)
-        self.meshPolyData.Modified()  # Mark the polydata as modified to update the rendering
+        # normalized_values = np.clip(pressure, 0, MAX_VALUE) / MAX_VALUE
+        # colors = np.column_stack(
+        #     [normalized_values * 255, np.zeros_like(normalized_values), np.full_like(normalized_values, 255)])
+
+        # vtkData = numpy_support.numpy_to_vtk(num_array=colors, deep=True, array_type=vtk.VTK_UNSIGNED_CHAR)
+
+        # self.meshPolyData.GetPointData().SetScalars(vtkData)
+        # self.meshPolyData.Modified()  # Mark the polydata as modified to update the rendering
+
+        # Update the colors in the polydata
+        self.pointPolydata.GetPointData().SetScalars(self.colors)
+        self.pointPolydata.Modified()  # Mark the polydata as modified to update the rendering
 
         self.renderWindow.Render()  # Re-render the window
 
@@ -230,7 +246,7 @@ class VTKPointCloudRenderer:
 if __name__ == "__main__":
     ports = serial.tools.list_ports.comports()
     for port in ports:
-        if port.name.startswith("ttyACM"):
+        if port.name.startswith("cu.usbmodem"):
             selected_port = port
             break
     else:
