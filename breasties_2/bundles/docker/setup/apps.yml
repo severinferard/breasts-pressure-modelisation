@@ -1,0 +1,6 @@
+trame: # Default app under /index.html
+  www_modules:
+    - breasties_2.module
+  app: breasties_2
+breasties_2: # /breasties_2.html
+  app: breasties_2

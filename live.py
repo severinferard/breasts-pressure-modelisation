@@ -1,4 +1,5 @@
 import serial
+import serial.tools.list_ports
 import time
 import numpy as np
 import pyvista as pv
@@ -13,7 +14,21 @@ N_COLUMNS = 21
 N_ROWS = 12
 K = 5
 
-ser = serial.Serial('/dev/tty.usbmodem1101', 115200, timeout=1)
+ports = serial.tools.list_ports.comports()
+for port in ports:
+    if port.name.startswith("cu.usbmodem"):
+        selected_port = port
+        break
+else:
+    selected_port = None
+
+if not selected_port:
+    print("No matching port found.")
+    exit(1)
+
+print(f"Using port {selected_port.device}")
+
+ser = serial.Serial(selected_port.device, 115200, timeout=1)
 
 
 noise_frame = 0
@@ -94,6 +109,7 @@ reciprocal_distances = 1 / boob_mesh['nearest_points_dist']
 # Step 2: Square the reciprocal distances
 squared_reciprocal_distances = reciprocal_distances ** 1.2
 
+
 # Step 3: Normalize the weights
 normalized_weights = squared_reciprocal_distances / \
     np.sum(squared_reciprocal_distances, axis=1, keepdims=True)
@@ -102,11 +118,11 @@ boob_mesh['pressure'] = np.zeros(boob_mesh.points.shape[0])
 boob_mesh['max_pressure'] = boob_mesh['pressure']
 
 
-MAX_VALUE = 30
-MIN_VALUE = 0
+MAX_VALUE = 150
+MIN_VALUE = 30
 
 
-pl = pvqt.BackgroundPlotter(shape=(2, 2), border=False)
+pl = pv.Plotter(shape=(1, 2), border=False)
 pl.subplot(0, 0)
 pl.add_text("Measured Pressure Values on Grid", font_size=12)
 pl.add_mesh(point_cloud, scalars='pressure', cmap='cool', point_size=15, clim=[MIN_VALUE, MAX_VALUE])
@@ -115,15 +131,16 @@ pl.subplot(0, 1)
 pl.add_text(f"Inverse Distance Weighted Interpolation (k={K})", font_size=12)
 pl.add_mesh(boob_mesh, scalars='pressure', cmap='cool', clim=[MIN_VALUE, MAX_VALUE])
 
-pl.subplot(1, 0)
-pl.add_text(f"Max Measured Pressure Values On Grid", font_size=12)
-pl.add_mesh(point_cloud, scalars='max_pressure', cmap='cool',
-            point_size=15, copy_mesh=True, clim=[MIN_VALUE, MAX_VALUE])
 
-pl.subplot(1, 1)
-pl.add_text(f"Max Inverse Distance Weighted Interpolation (k={K})", font_size=12)
-pl.add_mesh(boob_mesh, scalars='max_pressure', cmap='cool',
-            copy_mesh=True, clim=[MIN_VALUE, MAX_VALUE])
+# pl.subplot(1, 0)
+# pl.add_text(f"Max Measured Pressure Values On Grid", font_size=12)
+# pl.add_mesh(point_cloud, scalars='max_pressure', cmap='cool',
+#             point_size=15, copy_mesh=True, clim=[MIN_VALUE, MAX_VALUE])
+
+# pl.subplot(1, 1)
+# pl.add_text(f"Max Inverse Distance Weighted Interpolation (k={K})", font_size=12)
+# pl.add_mesh(boob_mesh, scalars='max_pressure', cmap='cool',
+#             copy_mesh=True, clim=[MIN_VALUE, MAX_VALUE])
 
 pl.link_views()
 
