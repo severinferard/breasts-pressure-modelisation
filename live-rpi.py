@@ -7,6 +7,51 @@ from pyvista import examples
 import pyvistaqt as pvqt
 from scipy.spatial import KDTree
 import noise
+import os
+from typing import Optional, Tuple
+
+from qtpy import QtCore
+from qtpy.QtCore import Signal
+from qtpy.QtCore import Qt
+from qtpy.QtWidgets import QMainWindow, QWidget
+
+
+if not os.path.exists("/media/ubuntu/BREASTIES"):
+    print("The folder /media/ubuntu/BREASTIES does not exist.")
+    exit(1)
+
+class MainWindow(QMainWindow):
+    """Convenience MainWindow that manages the application."""
+
+    signal_close = Signal()
+    signal_gesture = Signal(QtCore.QEvent)
+
+    def __init__(
+        self,
+        parent: Optional[QWidget] = None,
+        title: Optional[str] = None,
+        size: Optional[Tuple[int, int]] = None,
+    ) -> None:
+        """Initialize the main window."""
+        QMainWindow.__init__(self, parent=parent)
+        if title is not None:
+            self.setWindowTitle(title)
+        if size is not None:
+            self.resize(*size)
+        self.setWindowFlag(Qt.FramelessWindowHint)
+
+    def event(self, event: QtCore.QEvent) -> bool:
+        """Manage window events and filter the gesture event."""
+        if event.type() == QtCore.QEvent.Gesture:  # pragma: no cover
+            self.signal_gesture.emit(event)
+            return True
+        return super().event(event)
+
+    def closeEvent(self, event: QtCore.QEvent) -> None:  # pylint: disable=invalid-name
+        """Manage the close event."""
+        self.signal_close.emit()
+        event.accept()
+
 
 np.set_printoptions(linewidth=500)
 
@@ -15,8 +60,10 @@ N_ROWS = 12
 K = 5
 
 ports = serial.tools.list_ports.comports()
+
 for port in ports:
-    if port.name.startswith("cu.usbmodem"):
+    print(port.name)
+    if port.name.startswith("ttyACM"):
         selected_port = port
         break
 else:
@@ -28,13 +75,10 @@ if not selected_port:
 
 print(f"Using port {selected_port.device}")
 
-ser = serial.Serial(selected_port.device, 115200, timeout=1)
-
-
 noise_frame = 0
 
 
-def read_noise():
+def read_noise(ser):
     global noise_frame
     scale = 10.0
     octaves = 4
@@ -70,6 +114,7 @@ def read_sample():
         data = np.array(val.decode().strip().split(','))
         if (len(data) != N_COLUMNS * N_ROWS):
             print("Invalid data")
+            print(len(data))
             return None
 
     except UnicodeDecodeError:
@@ -78,32 +123,9 @@ def read_sample():
     return data.astype(np.int32)
 
 
-def remove_noise(data):
-    table = np.reshape(data, (N_ROWS, N_COLUMNS))
-    threshold = 100  # Define your threshold value here
+dirname = os.path.dirname(__file__)
 
-    for i in range(N_ROWS):
-        for j in range(N_COLUMNS):
-            if table[i, j] > threshold:
-                neighbors_x = []
-                neighbors_y = []
-
-                if i > 0:
-                    neighbors_y.append(table[i-1, j])
-                if i < N_ROWS - 1:
-                    neighbors_y.append(table[i+1, j])
-                if j > 0:
-                    neighbors_x.append(table[i, j-1])
-                if j < N_COLUMNS - 1:
-                    neighbors_x.append(table[i, j+1])
-
-                if all(x <= threshold for x in neighbors_x) and all(y <= threshold for y in neighbors_y):
-                    table[i, j] = 0  # Remove the noise by setting it to 0
-
-    return table.flatten()
-
-
-points = np.load("./assets/boob_grid_12_21.npy")
+points = np.load(os.path.join(dirname, "./assets/boob_grid_12_21.npy"))
 
 # Remove points that are outside of the boob mesh.
 # Because those points have been skipped during the points mapping, their value is (0, 0, 0)
@@ -118,7 +140,7 @@ point_cloud['max_pressure'] = np.zeros(points_of_interest.shape[0])
 
 
 # Load the boob 3D model from file
-boob_mesh = pv.read('./assets/boob.obj')
+boob_mesh = pv.read(os.path.join(dirname, './assets/boob.obj'))
 boob_mesh.translate(np.array([0, -0.035, 0]), inplace=True)
 
 # Create a kd-tree for quick nearest-neighbor lookup.
@@ -147,7 +169,8 @@ MAX_VALUE = 150
 MIN_VALUE = 30
 
 
-pl = pv.Plotter(shape=(1, 2), border=False)
+pl = pvqt.BackgroundPlotter(shape=(1, 2), border=False, toolbar=False,
+                            menu_bar=False, editor=False, app_window_class=MainWindow)
 pl.subplot(0, 0)
 pl.add_text("Measured Pressure Values on Grid", font_size=12)
 pl.add_mesh(point_cloud, scalars='pressure', cmap='cool', point_size=15, clim=[MIN_VALUE, MAX_VALUE])
@@ -173,27 +196,38 @@ pl.camera_position = 'xy'
 pl.camera.elevation += 100
 
 calibration_data = None
+previous_data = None
+last_touch_time = time.time()
 
+with serial.Serial(selected_port.device, 115200, timeout=1) as ser:
+    while True:
 
-while True:
+        try:
+            data = read_sample()
+        except KeyboardInterrupt:
+            exit(0)
+        except:
+            continue
+        # data = read_noise()
+        if (data is None):
+            continue
 
-    data = read_sample()
-    # data = read_noise()
-    if (data is None):
-        continue
+        if (calibration_data is None):
+            calibration_data = data
+        data = np.subtract(data, calibration_data)
+        data = np.delete(data, points_to_skip)
 
-    if (calibration_data is None):
-        calibration_data = data
+        point_cloud['pressure'][:] = data
+        point_cloud['max_pressure'][:] = np.maximum(point_cloud['max_pressure'], data)
 
-    data = np.subtract(data, calibration_data)
-    data = np.delete(data, points_to_skip)
+        boob_mesh['pressure'][:] = np.sum(data[boob_mesh['nearest_points']] * normalized_weights, axis=1)
+        # boob_mesh['max_pressure'][:] = np.sum(
+        #     point_cloud['max_pressure'][boob_mesh['nearest_points']] * normalized_weights, axis=1)
 
-    point_cloud['pressure'][:] = data
-    point_cloud['max_pressure'][:] = np.maximum(point_cloud['max_pressure'], data)
+        pl.render()
+        pl.app.processEvents()
 
-    boob_mesh['pressure'][:] = np.sum(data[boob_mesh['nearest_points']] * normalized_weights, axis=1)
-    # boob_mesh['max_pressure'][:] = np.sum(
-    #     point_cloud['max_pressure'][boob_mesh['nearest_points']] * normalized_weights, axis=1)
-
-    pl.render()
-    pl.app.processEvents()
+        if previous_data is not None:
+            diff = np.abs(np.subtract(data, previous_data))
+            print(np.max(diff))
+        previous_data = data

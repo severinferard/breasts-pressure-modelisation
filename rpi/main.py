@@ -144,7 +144,7 @@ async def main():
     boob_mesh['pressure'] = np.zeros(boob_mesh.points.shape[0])
     boob_mesh['max_pressure'] = boob_mesh['pressure']
 
-    pl = pv.Plotter(shape=(1, 2), border=False)
+    pl = pv.Plotter(shape=(1, 2), border=False, )
     pl.subplot(0, 0)
     pl.add_text("Measured Pressure Values on Grid", font_size=12)
     pl.add_mesh(point_cloud, scalars='pressure', cmap='cool',
