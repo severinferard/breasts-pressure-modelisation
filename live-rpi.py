@@ -1,4 +1,3 @@
-import serial
 import serial.tools.list_ports
 import time
 import numpy as np
@@ -15,10 +14,6 @@ from qtpy.QtCore import Signal
 from qtpy.QtCore import Qt
 from qtpy.QtWidgets import QMainWindow, QWidget
 
-
-if not os.path.exists("/media/ubuntu/BREASTIES"):
-    print("The folder /media/ubuntu/BREASTIES does not exist.")
-    exit(1)
 
 class MainWindow(QMainWindow):
     """Convenience MainWindow that manages the application."""
@@ -59,10 +54,11 @@ N_COLUMNS = 21
 N_ROWS = 12
 K = 5
 
+MOUNT_DIR = "/media/ubuntu/"
+
 ports = serial.tools.list_ports.comports()
 
 for port in ports:
-    print(port.name)
     if port.name.startswith("ttyACM"):
         selected_port = port
         break
@@ -103,6 +99,42 @@ def read_noise(ser):
     noise_frame += 1
     return data.flatten() * 100
 
+# def remove_noise(data):
+#     table = np.reshape(data, (N_ROWS, N_COLUMNS))
+#     threshold = 10  # Define your threshold value here
+
+#     for i in range(N_ROWS):
+#         for j in range(N_COLUMNS):
+#             if table[i, j] > threshold:
+#                 neighbors_x = []
+#                 neighbors_y = []
+
+#                 if i > 0:
+#                     neighbors_y.append(table[i-1, j])
+#                 if i < N_ROWS - 1:
+#                     neighbors_y.append(table[i+1, j])
+#                 if j > 0:
+#                     neighbors_x.append(table[i, j-1])
+#                 if j < N_COLUMNS - 1:
+#                     neighbors_x.append(table[i, j+1])
+
+#                 neighbors = neighbors_x + neighbors_y
+#                 print(neighbors)
+#                 if any(n > 10 for n in neighbors):
+#                     pass
+#                 else:
+#                     print("removed noise")
+#                     table[i, j] = 0
+
+#                 # if all(x <= threshold for x in neighbors_x) or all(y <= threshold for y in neighbors_y):
+#                 #     print("noise ignored")
+#                 #     table[i, j] = 0  # Remove the noise by setting it to 0
+
+#                 # if not neighbors_x or not neighbors_y:
+#                 #     table[i, j] = 0  # Remove the noise by setting it to 0
+
+#     return table.flatten()
+
 
 def read_sample():
     val = ser.readline()
@@ -114,13 +146,26 @@ def read_sample():
         data = np.array(val.decode().strip().split(','))
         if (len(data) != N_COLUMNS * N_ROWS):
             print("Invalid data")
-            print(len(data))
             return None
 
     except UnicodeDecodeError:
         return None
 
     return data.astype(np.int32)
+
+
+def get_storage_file():
+
+    if not os.path.exists(MOUNT_DIR) or not os.path.isdir(MOUNT_DIR):
+        return None
+
+    storage_dirs = os.listdir(MOUNT_DIR)
+    if (len(storage_dirs) == 0):
+        return None
+
+    storage_dir = storage_dirs[0]
+
+    return os.path.join(MOUNT_DIR, storage_dir, time.strftime("data_%Y%m%d_%H%M%S.bin"))
 
 
 dirname = os.path.dirname(__file__)
@@ -173,7 +218,7 @@ pl = pvqt.BackgroundPlotter(shape=(1, 2), border=False, toolbar=False,
                             menu_bar=False, editor=False, app_window_class=MainWindow)
 pl.subplot(0, 0)
 pl.add_text("Measured Pressure Values on Grid", font_size=12)
-pl.add_mesh(point_cloud, scalars='pressure', cmap='cool', point_size=15, clim=[MIN_VALUE, MAX_VALUE])
+pl.add_mesh(point_cloud, scalars='pressure', cmap='cool', point_size=10, clim=[MIN_VALUE, MAX_VALUE])
 
 pl.subplot(0, 1)
 pl.add_text(f"Inverse Distance Weighted Interpolation (k={K})", font_size=12)
@@ -199,35 +244,53 @@ calibration_data = None
 previous_data = None
 last_touch_time = time.time()
 
-with serial.Serial(selected_port.device, 115200, timeout=1) as ser:
-    while True:
 
-        try:
-            data = read_sample()
-        except KeyboardInterrupt:
-            exit(0)
-        except:
-            continue
-        # data = read_noise()
-        if (data is None):
-            continue
+print("Starting loop")
+storage_file_name = get_storage_file() or '/dev/null'
+print(f"Storage file: {storage_file_name}")
 
-        if (calibration_data is None):
-            calibration_data = data
-        data = np.subtract(data, calibration_data)
-        data = np.delete(data, points_to_skip)
 
-        point_cloud['pressure'][:] = data
-        point_cloud['max_pressure'][:] = np.maximum(point_cloud['max_pressure'], data)
+with open(storage_file_name, "wb") as f:
+    with serial.Serial(selected_port.device, 115200, timeout=1) as ser:
+        while True:
 
-        boob_mesh['pressure'][:] = np.sum(data[boob_mesh['nearest_points']] * normalized_weights, axis=1)
-        # boob_mesh['max_pressure'][:] = np.sum(
-        #     point_cloud['max_pressure'][boob_mesh['nearest_points']] * normalized_weights, axis=1)
+            try:
+                raw_data = read_sample()
+            except KeyboardInterrupt:
+                exit(0)
+            except Exception as e:
+                print(e)
+                continue
+            # data = read_noise()
+            if (raw_data is None):
+                continue
 
-        pl.render()
-        pl.app.processEvents()
+            if (calibration_data is None):
+                calibration_data = raw_data
 
-        if previous_data is not None:
-            diff = np.abs(np.subtract(data, previous_data))
-            print(np.max(diff))
-        previous_data = data
+            # raw_data = remove_noise(raw_data)
+            data = np.subtract(raw_data, calibration_data)
+            data = np.delete(data, points_to_skip)
+
+            f.write(data)
+
+            point_cloud['pressure'][:] = data
+            point_cloud['max_pressure'][:] = np.maximum(point_cloud['max_pressure'], data)
+
+            boob_mesh['pressure'][:] = np.sum(data[boob_mesh['nearest_points']] * normalized_weights, axis=1)
+            # boob_mesh['max_pressure'][:] = np.sum(
+            #     point_cloud['max_pressure'][boob_mesh['nearest_points']] * normalized_weights, axis=1)
+
+            pl.render()
+            pl.app.processEvents()
+
+            if previous_data is not None:
+                diff = np.abs(np.subtract(data, previous_data))
+                change = np.max(diff)
+                if change > 100:
+                    last_touch_time = time.time()
+            if time.time() - last_touch_time > 10:
+                print("calibrating")
+                calibration_data = raw_data
+                last_touch_time = time.time()
+            previous_data = data
