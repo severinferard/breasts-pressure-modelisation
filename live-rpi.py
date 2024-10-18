@@ -210,12 +210,17 @@ boob_mesh['pressure'] = np.zeros(boob_mesh.points.shape[0])
 boob_mesh['max_pressure'] = boob_mesh['pressure']
 
 
+storage_file_name = get_storage_file() or '/dev/null'
+print(f"Storage file: {storage_file_name}")
+
 MAX_VALUE = 150
 MIN_VALUE = 30
 
-
 pl = pvqt.BackgroundPlotter(shape=(1, 2), border=False, toolbar=False,
                             menu_bar=False, editor=False, app_window_class=MainWindow)
+
+pl.add_checkbox_button_widget(callback=lambda state: exit(0), position=[10, 10])
+
 pl.subplot(0, 0)
 pl.add_text("Measured Pressure Values on Grid", font_size=12)
 pl.add_mesh(point_cloud, scalars='pressure', cmap='cool', point_size=10, clim=[MIN_VALUE, MAX_VALUE])
@@ -223,6 +228,8 @@ pl.add_mesh(point_cloud, scalars='pressure', cmap='cool', point_size=10, clim=[M
 pl.subplot(0, 1)
 pl.add_text(f"Inverse Distance Weighted Interpolation (k={K})", font_size=12)
 pl.add_mesh(boob_mesh, scalars='pressure', cmap='cool', clim=[MIN_VALUE, MAX_VALUE])
+pl.add_text(f"Storage: {storage_file_name if storage_file_name !=
+            "/dev/null" else 'none'}", font_size=12, position="lower_right")
 
 
 # pl.subplot(1, 0)
@@ -246,8 +253,6 @@ last_touch_time = time.time()
 
 
 print("Starting loop")
-storage_file_name = get_storage_file() or '/dev/null'
-print(f"Storage file: {storage_file_name}")
 
 
 with open(storage_file_name, "wb") as f:
